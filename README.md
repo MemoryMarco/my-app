@@ -1,5 +1,5 @@
 # 留声 · 精致留言板 (LiúShēng)
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MemoryMarco/my-app)
 留声 (LiúShēng) 是一个极致视觉与交互��验并重的留言板 Web 应用。用户使用手机验证码（OTP）登录，登录后可发布留言、回复、点赞��留言会存储到 Cloudflare Durable Object，并在配置的收件邮箱上按「工作日（周一到五）每天 20:00」以一天一封的形式汇总发送。
 该应用采用极简设计（Minimalist Design），主色系为暖橙（RGB 243,128,32）、暗灰（56,65,84）和靛蓝（99,102,241），注重首屏视觉冲击力和流畅交互。移动优先，完美响应式布局。
 ## 关键特性
