@@ -1,88 +1,160 @@
 # 留声 · 精致留言板 (LiúShēng)
+
 [cloudflarebutton]
-留声 (LiúShēng) 是一个极致视觉与交互��验并重的留言板 Web 应用。用户使用手机验证码（OTP）登录，登录后可发布留言、回复、点赞��留言会存储到 Cloudflare Durable Object，并在配置的收件邮箱上按「工作日（周一到五）每天 20:00」以一天一封的形式汇总发送。
+
+留声 (LiúShēng) 是一个极致视觉与交互体验并重的留言板 Web 应用。用户使用手机验证码（OTP）登录，登录后可发布留言；留言会存储到 Cloudflare Durable Object，并在配置的收件邮箱上按「工作日（周一到周五）每天 20:00」以一天一封的形式汇总发送。初版提供手动触发 `/api/send-weekly` 端点，生产环境可通过 Cloudflare Cron Trigger 或第三方任务调度器定时调用。
+
 该应用采用极简设计（Minimalist Design），主色系为暖橙（RGB 243,128,32）、暗灰（56,65,84）和靛蓝（99,102,241），注重首屏视觉冲击力和流畅交互。移动优先，完美响应式布局。
+
 ## 关键特性
-- **手机 OTP 登录**：安全便捷的验证码登录，支持演示模式和生产模式。
-- **留言、回复与点赞**：用户登录后可发布文本留言，在留言下进行多层级回复（最多 3 层），并对任意留言或回复进行点赞。
-- **邮件汇总发送**：工作日 20:00 自动汇总当天新留言、回复和点赞数，发送到配置邮箱。
-- **配置管理**：站点级邮箱设置面板，支持 provider 类型（mock/http）、API 密钥和手动触发发送。
-- **视觉与交互精致**：使用 shadcn/ui 组件，Tailwind 渐变背景、���载骨架屏、空状态插画、Toast 反馈，确保用户体验流畅。
-- **持久化存储**：基于 Cloudflare Durable Objects 的实体存储，支持高效列表查询。
-- **安全与扩展**：OTP 防刷���流、邮件提供商适配、时区配置、生产密钥管理（Worker Secrets）。
-## 技���栈
-- **前端**：React 18 + React Router 6 + TypeScript + shadcn/ui + Tailwind CSS 3 + Lucide React + Framer Motion + Sonner + React Hook Form + Zod + Immer。
-- **后端**：Hono + Cloudflare Workers + Durable Objects。
-- **构建与部署**：Vite + Bun + Wrangler。
+
+- **手机 OTP 登录**：安全便捷的验证码登录，支持演示模式（前端显示验证码）和生产模式（集成真实 SMS 提供商）。
+- **留言发布与列表**：用户登录后可发布文本留言，实时显示在精美卡片列表中，支持微交互（如 hover 提升、动画）。
+- **邮件汇总发送**：工作日 20:00 自动汇总当天留言发送到配置邮箱（支持 mock 测试和真实提供商如 SendGrid、Mailgun）。
+- **配置管理**：站点级邮箱设置面板，支持 provider 类型（mock/http）、API 密钥（后端安全存储）和手动触发发送。
+- **视觉与交互精致**：使用 shadcn/ui 组件，Tailwind 渐变背景、加载骨架屏、空状态插画、Toast 反馈，确保用户体验流畅。
+- **持久化存储**：基于 Cloudflare Durable Objects 的实体存储（MessageEntity、SettingsEntity、AuthEntity），支持 IndexedEntity 高效列表查询。
+- **安全与扩展**：OTP 防刷限流、邮件提供商适配、时区配置、生产密钥管理（Worker Secrets）。
+
+## 技术栈
+
+- **前端**：React 18 + React Router 6 + TypeScript + shadcn/ui + Tailwind CSS 3 + Lucide React（图标） + Framer Motion（动画） + Sonner（Toast） + React Hook Form + Zod（验证） + Input-OTP（验证码输入） + Zustand（状态管理） + Date-fns（日期格式）。
+- **后端**：Hono（路由） + Cloudflare Workers + Durable Objects（持久化） + Entities 模式（IndexedEntity）。
+- **构建与部署**：Vite（开发） + Bun（包管理） + Wrangler（Cloudflare 部署）。
+- **其他**：Immer（不可变状态） + @tanstack/react-query（可选数据缓存）。
+
 ## 快速开始
+
 ### 先决条件
-- Bun 1.0+
-- Cloudflare 账户
-### 安装与开发
-1.  克隆仓库并安装依赖：
-    ```bash
-    git clone <your-repo-url>
-    cd liuyan-studio
-    bun install
-    ```
-2.  启动开发服务器：
-    ```bash
-    bun run dev
-    ```
-    访问 `http://localhost:3000`。前端会自动代理 `/api/*` 请求到本地 Worker 模拟器。
-### 构建与部署
-```bash
-# 构建生产版本
-bun run build
-# 部署到 Cloudflare
-wrangler deploy
+
+- Bun 1.0+（推荐使用 Bun 作为包管理器）。
+- Node.js 18+（可选，用于某些工具）。
+- Cloudflare 账户（用于部署）。
+
+### 安装
+
+1. 克隆仓库：
+   ```
+   git clone <your-repo-url>
+   cd liuyan-studio
+   ```
+
+2. 安装依赖（使用 Bun）：
+   ```
+   bun install
+   ```
+
+3. 生成 Cloudflare Worker 类型定义：
+   ```
+   bun run cf-typegen
+   ```
+
+### 开发模式
+
+1. 启动前端开发服务器：
+   ```
+   bun run dev
+   ```
+   访问 `http://localhost:3000`（默认端口，可通过环境变量 `PORT` 修改）。
+
+2. （可选）启动 Worker 开发（Pages 模式）：
+   ```
+   bun run dev:worker
+   ```
+   这将启动本地 Worker 模拟器，支持 API 测试。
+
+前端会自动代理 `/api/*` 请求到 Worker。演示环境中，OTP 验证码将直接在前端显示（仅用于测试）；生产需替换为真实 SMS 服务。
+
+### 构建
+
+构建生产版本：
 ```
-## 迁移到 Spring Boot + Vue.js
-本节为将当前 Cloudflare Workers 应用迁移到传统的��栈分离架构（Java Spring Boot + Vue.js）的指南。该迁移后的代码位于 `/migration` 目录中。
-### 1. 后端迁移 (Spring Boot)
-#### 1.1. 项目设置
-后端代码位于 `migration/backend`。它是一个使用 Maven 构建的 Spring Boot 项目。
-- **依赖**: Spring Web, Spring Data JPA, Spring Security, Quartz, H2 (开发), PostgreSQL (生产), JJWT, Lombok. 详��信息请查看 `migration/backend/pom.xml`。
-- **运行**:
-  ```bash
-  # 进入后端目录
-  cd migration/backend
-  # 使用 Maven Wrapper 运行 (推荐)
-  ./mvnw spring-boot:run
+bun run build
+```
+
+## 使用指南
+
+### 用户流程
+
+1. **访问首页**：显示 Hero 渐变背景、登录 CTA 和空留言列表（带骨架屏）。
+2. **OTP 登录**：
+   - 点击登录按钮，打开底部 Sheet。
+   - 输入手机号，点击“发送验证码”（演示模式显示 6 位码）。
+   - 输入验证码验证，成功后关闭 Sheet 并显示留言面板。
+3. **发布留言**：登录后在 Textarea 输入文本，点击发送按钮（乐观更新 + Toast 反馈）。
+4. **查看留言**：列表以卡片形式显示（用户名/手机号遮掩、时间戳、hover 动画）。
+5. **管理员设置**（右上角入口）：
+   - 配置收件邮箱、provider（mock 或 http）。
+   - 点击“立即发送”手动触发 `/api/send-weekly` 测试。
+   - 查看发送记录（最近 5 次）和上次发送时间。
+
+### API 端点（`/api/*`）
+
+- `POST /api/auth/request-otp`：请求 OTP（body: `{ phone: string }`）。
+- `POST /api/auth/verify-otp`：验证 OTP 并返回 session token（body: `{ phone: string, code: string }`）。
+- `GET /api/messages`：获取留言列表（带 Authorization: Bearer <token>）。
+- `POST /api/messages`：创建留言（body: `{ text: string }`，需 token）。
+- `GET /api/settings/email`：获取邮箱配置。
+- `POST /api/settings/email`：保存配置（body: `{ email: string, provider: 'mock'|'http', apiUrl?: string, apiKey?: string, timezone?: string }`）。
+- `POST /api/send-weekly`：手动/定时发送汇总（管理员专用）。
+
+所有 API 返回 `{ success: boolean, data?: T, error?: string }` 格式。
+
+### 配置
+
+- **时区**：默认 UTC，在 Settings 面板配置（影响 20:00 发送时间）。
+- **邮件 Provider**：Mock 模式仅记录日志；HTTP 模式通过 fetch 调用外部 API（例如 SendGrid：`POST ${apiUrl}` with `{ to: email, subject: '每日留言', html: template }`）。
+- **生产密钥**：API 密钥存为 Worker Secret：
   ```
-  后端服务将在 `http://localhost:8080` 启动。
-#### 1.2. 测试
-- **OTP 登录**: 使用 Postman 或 cURL, `POST` 到 `http://localhost:8080/api/auth/request-otp` with body `{"phone": "12345678901"}`. 然后使用返回的 `demoCode` `POST` 到 `/api/auth/verify-otp`.
-- **发布留言**: `POST` 到 `http://localhost:8080/api/messages` with `Authorization: Bearer <token>` and body `{"text": "My first message!"}`.
-### 2. 前端迁移 (Vue.js)
-#### 2.1. 项目设置
-前端代码位于 `migration/frontend-vue`。它是一个使用 Vite 构建的 Vue 3 项目。
-- **运行**:
-  ```bash
-  # 进入���端目录
-  cd migration/frontend-vue
-  # 安装依赖
-  bun install
-  # 启动开发服务器
-  bun run dev
+  wrangler secret put SMS_API_KEY
+  wrangler secret put EMAIL_API_KEY
   ```
-  前端应用将在 `http://localhost:5173` (或 Vite 指定的其他端口) 启动，并自动代理 `/api` 请求到 `http://localhost:8080` 的后端服务。
-### 3. 部署
-- **后端 (Spring Boot)**:
-  1.  构建 JAR 文件: `cd migration/backend && ./mvnw clean package`
-  2.  将生成的 JAR 文件 (`target/liuyan-backend-1.0.0.jar`) 部署到支持 Java 的平台，如 Heroku 或 Railway。
-  3.  在部署平台设置环境变量:
-      - `DB_URL`: 生产 PostgreSQL 数据库的 JDBC URL.
-      - `DB_USER`: 数据库用户名.
-      - `DB_PASS`: 数据库密码.
-      - `JWT_SECRET`: 用于签发 JWT 的长而安全的密钥.
-- **前端 (Vue.js)**:
-  1.  构建静态文件: `cd migration/frontend-vue && bun run build`
-  2.  将 `dist` 目录下的内容部署到静态托管平台，如 Vercel, Netlify, 或 Cloudflare Pages。
-  3.  在托管平台配置反向代理，将所有 `/api/*` 请求转发到您后端服务的 URL。
-### 4. 数据迁移 (可选)
-要将数据从 Cloudflare Durable Objects 迁移到 PostgreSQL，需要编写一个一次性脚本。
-1.  **导出**: 创建一个临时的 Worker 端�� `/api/migrate/export`，该端点读取所有 `MessageEntity`, `ReplyEntity`, `LikeEntity` 数据并以 JSON 格式返回。
-2.  **导入**: 编写一个本地脚本（例如，使用 Java 或 Node.js），该脚本调用 `/api/migrate/export` 端点，获取数据，然后使用 JPA/JDBC 将数据批量插入到 PostgreSQL 数据库中。
+  在 SettingsEntity 中加密存储非敏感配置。
+
+## 部署
+
+### Cloudflare Workers 部署
+
+1. 登录 Cloudflare Dashboard，创建新 Worker 项目。
+2. 安装 Wrangler CLI（如果未安装）：
+   ```
+   bun add -g wrangler
+   wrangler auth login
+   ```
+
+3. 配置绑定（wrangler.jsonc 已预设 GlobalDurableObject）：
+   ```
+   wrangler deploy
+   ```
+
+4. （可选）设置 Cron Trigger（生产定时发送）：
+   - 在 Dashboard > Triggers > Cron Triggers 添加：
+     - 表达式：`0 20 * * 1-5`（周一至周五 20:00 UTC）。
+     - 目标：`/api/send-weekly`（POST）。
+
+5. 自定义域名：绑定到 Workers 域名或自定义域名。
+
+[cloudflarebutton]
+
+### 生产集成
+
+- **SMS Provider**：替换 OTP 逻辑为真实服务（如 Twilio、阿里云 SMS），使用 Worker Secret 存储密钥。
+- **Rate Limiting**：在 `/api/auth/request-otp` 添加限流（每手机号 60s 一次）。
+- **邮件适配**：在 `worker/user-routes.ts` 的 send-weekly 实现 provider-specific payload（例如 SendGrid JSON）。
+- **监控**：启用 Cloudflare Observability，添加日志（Pino 已集成）。
+
+构建后，静态资源通过 Assets 托管，前端 SPA 模式处理路由。
+
+## 开发贡献
+
+1. 分支开发：`git checkout -b feature/your-feature`。
+2. 代码风格：遵循 ESLint + Prettier（`bun run lint` 检查）。
+3. 测试：手动测试 API（Postman）和 UI（Chrome DevTools 移动模拟）。
+4. 提交：`git commit -m "feat: add OTP login"`，遵循 Conventional Commits。
+5. PR：针对 main 分支，包含变更描述。
+
+问题或贡献欢迎提交 Issue 或 Pull Request。
+
 ## 许可证
+
 MIT License。
