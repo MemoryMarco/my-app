@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { MessageSquare, Send, Settings, Loader2, LogIn, Mail, Phone, KeyRound, Info } from 'lucide-react';
+import { MessageSquare, Send, Settings, Loader2, LogIn, Mail, Phone, KeyRound, Info, Percent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,7 +17,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDistanceToNow } from 'date-fns';
-import { ja } from 'date-fns/locale/ja';
+import { zhCN } from 'date-fns/locale';
 import { z } from 'zod';
 type AuthStep = 'phone' | 'otp';
 const settingsSchema = z.object({
@@ -27,9 +27,22 @@ const settingsSchema = z.object({
   apiKey: z.string().optional(),
   timezone: z.string().optional(),
 }).refine(data => data.provider !== 'http' || (data.apiUrl && data.apiUrl.length > 0), {
-  message: "HTTP Provider ���要 API URL。",
+  message: "HTTP Provider 需要 API URL。",
   path: ["apiUrl"],
 });
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.07,
+    },
+  },
+};
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0 },
+};
 export function HomePage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,7 +67,7 @@ export function HomePage() {
       const data = await api<{ items: Message[] }>('/api/messages');
       setMessages(data.items);
     } catch (error) {
-      toast.error('Failed to load messages.');
+      toast.error('��载留言失败。');
       console.error(error);
     } finally {
       setIsLoading(false);
@@ -87,11 +100,11 @@ export function HomePage() {
         method: 'POST',
         body: JSON.stringify({ phone }),
       });
-      toast.success(`[演示] 验证码已发送: ${demoCode}`);
+      toast.success(`[演示] 验证��已发送: ${demoCode}`);
       setAuthStep('otp');
       setCountdown(60);
     } catch (error) {
-      toast.error((error as Error).message || '发送验证码失败���请稍后再试。');
+      toast.error((error as Error).message || '发送验证码失败，请稍���再试。');
     } finally {
       setIsOtpLoading(false);
     }
@@ -108,13 +121,13 @@ export function HomePage() {
         body: JSON.stringify({ phone, code: otp }),
       });
       auth.loginWithToken(token, user);
-      toast.success('��录成功！');
+      toast.success('登录成���！');
       setAuthSheetOpen(false);
       setPhone('');
       setOtp('');
       setAuthStep('phone');
     } catch (error) {
-      toast.error('验证码错误或已过��。');
+      toast.error('验证码错误或已过期。');
     } finally {
       setIsOtpLoading(false);
     }
@@ -122,21 +135,31 @@ export function HomePage() {
   const handlePostMessage = async () => {
     if (!newMessage.trim()) return;
     setIsPosting(true);
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      userId: currentUser!.id,
+      phoneMasked: MASK_PHONE(currentUser!.phone),
+      text: newMessage,
+      ts: Date.now(),
+    };
+    setMessages(prev => [optimisticMessage, ...prev]);
+    setNewMessage('');
     try {
       const postedMessage = await api<Message>('/api/messages', {
         method: 'POST',
         body: JSON.stringify({ text: newMessage }),
       });
-      setMessages(prev => [postedMessage, ...prev]);
-      setNewMessage('');
+      setMessages(prev => prev.map(m => m.id === optimisticMessage.id ? postedMessage : m));
       toast.success('留言成功！');
     } catch (error) {
-      toast.error('发布失败，请稍后重试。');
-      auth.logout(); // Force logout on auth error
+      toast.error('发布失败，请重新登录。');
+      setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
+      auth.logout();
     } finally {
       setIsPosting(false);
     }
   };
+  const MASK_PHONE = (phone: string) => `${phone.substring(0, 3)}****${phone.substring(7)}`;
   const handleOpenSettings = async () => {
     setSettingsSheetOpen(true);
     setIsSettingsLoading(true);
@@ -152,7 +175,7 @@ export function HomePage() {
   const handleSaveSettings = async () => {
     const result = settingsSchema.safeParse(settings);
     if (!result.success) {
-      result.error.errors.forEach(err => toast.error(err.message));
+      result.error.issues.forEach(err => toast.error(err.message));
       return;
     }
     setIsSettingsLoading(true);
@@ -161,7 +184,7 @@ export function HomePage() {
         method: 'POST',
         body: JSON.stringify(settings),
       });
-      toast.success('设置已保存。');
+      toast.success('设置已保��。');
       setSettingsSheetOpen(false);
     } catch (error) {
       toast.error('保存失败。');
@@ -181,6 +204,9 @@ export function HomePage() {
       setIsSettingsLoading(false);
     }
   };
+  const successRate = settings.sendLogs && settings.sendLogs.length > 0
+    ? (settings.sendLogs.filter(l => l.status === 'success').length / settings.sendLogs.length * 100).toFixed(0)
+    : 'N/A';
   return (
     <TooltipProvider>
       <div className="relative min-h-screen bg-background font-sans">
@@ -196,11 +222,11 @@ export function HomePage() {
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle className="relative top-0 right-0" />
-              <Button variant="ghost" size="icon" onClick={handleOpenSettings}><Settings className="h-5 w-5" /></Button>
+              <Button variant="ghost" size="icon" onClick={handleOpenSettings} aria-label="打开设置"><Settings className="h-5 w-5" /></Button>
               {isLoggedIn ? (
                 <Button variant="outline" size="sm" onClick={auth.logout}>登出</Button>
               ) : (
-                <Button size="sm" onClick={() => setAuthSheetOpen(true)} className="btn-gradient">登录</Button>
+                <Button size="sm" onClick={() => setAuthSheetOpen(true)} className="btn-gradient">���录</Button>
               )}
             </div>
           </div>
@@ -208,40 +234,48 @@ export function HomePage() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-8 md:py-10 lg:py-12">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-              <div className="md:col-span-2 space-y-4">
-                <AnimatePresence>
-                  {isLoading ? (
-                    Array.from({ length: 3 }).map((_, i) => (
-                      <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
-                        <MessageCard isLoading />
-                      </motion.div>
-                    ))
-                  ) : messages.length > 0 ? (
-                    messages.map((msg, i) => (
-                      <motion.div key={msg.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                        <MessageCard message={msg} />
-                      </motion.div>
-                    ))
-                  ) : (
-                    <div className="text-center py-16 border rounded-2xl bg-card/50">
-                      <p className="text-muted-foreground">还��有留言，快来发布第一条吧！</p>
-                    </div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <motion.div
+                className="md:col-span-2 space-y-4"
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+              >
+                {isLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <motion.div key={i} variants={cardVariants}>
+                      <MessageCard isLoading />
+                    </motion.div>
+                  ))
+                ) : messages.length > 0 ? (
+                  messages.map((msg) => (
+                    <motion.div key={msg.id} variants={cardVariants}>
+                      <MessageCard message={msg} />
+                    </motion.div>
+                  ))
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-center py-16 border rounded-2xl bg-card/50"
+                  >
+                    <p className="text-muted-foreground">还没有留言，快来发布第一条吧！</p>
+                  </motion.div>
+                )}
+              </motion.div>
               <div className="md:col-span-1 sticky top-24">
                 <div className="p-6 rounded-2xl bg-card shadow-soft space-y-4">
                   <h2 className="text-xl font-semibold">记录此刻</h2>
                   {isLoggedIn ? (
                     <>
-                      <p className="text-sm text-muted-foreground">欢迎, {currentUser?.phone ? `${currentUser.phone.substring(0, 3)}****${currentUser.phone.substring(7)}` : '用户'}</p>
+                      <p className="text-sm text-muted-foreground">欢迎, {currentUser?.phone ? MASK_PHONE(currentUser.phone) : '用户'}</p>
                       <Textarea
-                        placeholder="说点什��..."
+                        placeholder="说点什么..."
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         rows={5}
                         maxLength={500}
                         className="resize-none"
+                        aria-label="留言输入��"
                       />
                       <Button onClick={handlePostMessage} disabled={isPosting || !newMessage.trim()} className="w-full btn-gradient">
                         {isPosting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
@@ -273,7 +307,7 @@ export function HomePage() {
                 <div className="space-y-4">
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input type="tel" placeholder="请输入手机号" value={phone} onChange={e => setPhone(e.target.value)} className="pl-10" />
+                    <Input type="tel" placeholder="请输入手机号" value={phone} onChange={e => setPhone(e.target.value)} className="pl-10" aria-label="手机号输入框" />
                   </div>
                   <Button onClick={handleRequestOtp} disabled={isOtpLoading || countdown > 0} className="w-full btn-gradient">
                     {isOtpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -283,9 +317,9 @@ export function HomePage() {
               )}
               {authStep === 'otp' && (
                 <div className="space-y-4 text-center">
-                  <p className="text-sm text-muted-foreground">验证码已发送�� {phone}</p>
+                  <p className="text-sm text-muted-foreground">验证码已发送至 {phone}</p>
                   <div className="flex justify-center">
-                    <InputOTP maxLength={6} value={otp} onChange={setOtp}>
+                    <InputOTP maxLength={6} value={otp} onChange={setOtp} aria-label="验证码输入框">
                       <InputOTPGroup>
                         <InputOTPSlot index={0} /><InputOTPSlot index={1} /><InputOTPSlot index={2} /><InputOTPSlot index={3} /><InputOTPSlot index={4} /><InputOTPSlot index={5} />
                       </InputOTPGroup>
@@ -295,7 +329,7 @@ export function HomePage() {
                     {isOtpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
                     验证并登录
                   </Button>
-                  <Button variant="link" size="sm" onClick={() => { setAuthStep('phone'); setOtp(''); }}>返回</Button>
+                  <Button variant="link" size="sm" onClick={() => { setAuthStep('phone'); setOtp(''); }}>返���</Button>
                 </div>
               )}
             </div>
@@ -304,23 +338,23 @@ export function HomePage() {
         <Sheet open={isSettingsSheetOpen} onOpenChange={setSettingsSheetOpen}>
           <SheetContent className="sm:max-w-lg overflow-y-auto">
             <SheetHeader>
-              <SheetTitle>���箱设置</SheetTitle>
-              <SheetDescription>配置留言接收邮箱。留言将在工作日晚 8 点汇总发送。</SheetDescription>
+              <SheetTitle>邮箱设置</SheetTitle>
+              <SheetDescription>配置留言���收邮箱。留言将在工作日晚 8 ���汇总发送。</SheetDescription>
             </SheetHeader>
             <div className="py-8 space-y-6">
-              {isSettingsLoading && !settings.recipient ? <Skeleton className="h-24 w-full" /> : (
+              {isSettingsLoading && !settings.recipient ? <Skeleton className="h-48 w-full" /> : (
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">收件邮箱</label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                      <Input type="email" placeholder="your-email@example.com" value={settings.recipient || ''} onChange={e => setSettings(s => ({ ...s, recipient: e.target.value }))} className="pl-10" />
+                      <Input type="email" placeholder="your-email@example.com" value={settings.recipient || ''} onChange={e => setSettings(s => ({ ...s, recipient: e.target.value }))} className="pl-10" aria-label="收件邮箱" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">发送方式</label>
                     <Select value={settings.provider} onValueChange={(v) => setSettings(s => ({ ...s, provider: v as 'mock' | 'http' }))}>
-                      <SelectTrigger><SelectValue placeholder="选择发送方式" /></SelectTrigger>
+                      <SelectTrigger aria-label="选择发送方式"><SelectValue placeholder="选择发送方式" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="mock">Mock (演示)</SelectItem>
                         <SelectItem value="http">HTTP Provider</SelectItem>
@@ -331,24 +365,34 @@ export function HomePage() {
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 overflow-hidden">
                       <div className="space-y-2">
                         <label className="text-sm font-medium">API URL</label>
-                        <Input placeholder="https://api.sendgrid.com/v3/mail/send" value={settings.apiUrl || ''} onChange={e => setSettings(s => ({ ...s, apiUrl: e.target.value }))} />
+                        <Input placeholder="https://api.sendgrid.com/v3/mail/send" value={settings.apiUrl || ''} onChange={e => setSettings(s => ({ ...s, apiUrl: e.target.value }))} aria-label="API URL" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">API Key</label>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="relative">
-                              <Input type="password" placeholder="••••••••••••••••" value={settings.apiKey || ''} onChange={e => setSettings(s => ({ ...s, apiKey: e.target.value }))} />
+                              <Input type="password" placeholder="••••••••••••••••" value={settings.apiKey || ''} onChange={e => setSettings(s => ({ ...s, apiKey: e.target.value }))} aria-label="API Key" />
                               <Info className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             </div>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p className="text-xs">仅用于演示。生产环境请使用 Worker Secrets。</p>
+                            <p className="text-xs">��用于演示。生产环境请使用 Worker Secrets。</p>
                           </TooltipContent>
                         </Tooltip>
                       </div>
                     </motion.div>
                   )}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">时区</label>
+                    <Select value={settings.timezone} onValueChange={(v) => setSettings(s => ({ ...s, timezone: v }))}>
+                      <SelectTrigger aria-label="选择时区"><SelectValue placeholder="选择时区" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="UTC">UTC</SelectItem>
+                        <SelectItem value="Asia/Shanghai">Asia/Shanghai (UTC+8)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
               <div className="space-y-2">
@@ -361,16 +405,20 @@ export function HomePage() {
               </div>
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="logs">
-                  <AccordionTrigger>最近发送记录</AccordionTrigger>
+                  <AccordionTrigger>最���发送记录</AccordionTrigger>
                   <AccordionContent>
                     {isSettingsLoading && !settings.sendLogs ? <Skeleton className="h-20 w-full" /> :
                       settings.sendLogs && settings.sendLogs.length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
+                          <div className="flex items-center text-sm font-medium text-muted-foreground">
+                            <Percent className="h-4 w-4 mr-2" />
+                            <span>成功率: {successRate}%</span>
+                          </div>
                           {settings.sendLogs.slice(0, 5).map(log => (
                             <motion.div key={log.ts} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm border-l-2 pl-3" style={{ borderColor: log.status === 'success' ? 'hsl(var(--primary))' : 'hsl(var(--destructive))' }}>
                               <p className="font-medium">{log.messageCount} 条留言 - <span className={log.status === 'success' ? 'text-primary' : 'text-destructive'}>{log.status}</span></p>
-                              <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(log.ts), { addSuffix: true, locale: ja })}</p>
-                              <p className="text-xs text-muted-foreground truncate">{log.responseSnippet}</p>
+                              <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(log.ts), { addSuffix: true, locale: zhCN })}</p>
+                              <p className="text-xs text-muted-foreground truncate" title={log.responseSnippet}>{log.responseSnippet}</p>
                             </motion.div>
                           ))}
                         </div>
@@ -384,7 +432,7 @@ export function HomePage() {
         </Sheet>
         <Toaster richColors closeButton />
         <footer className="py-8 text-center text-muted-foreground/80 text-sm">
-          <p>Built with ❤️ at Cloudflare</p>
+          <p>Built with ���️ at Cloudflare</p>
         </footer>
       </div>
     </TooltipProvider>

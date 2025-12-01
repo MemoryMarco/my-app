@@ -17,6 +17,7 @@ export interface Settings {
   provider: 'mock' | 'http';
   apiUrl: string;
   apiKey: string; // Note: In production, this should be a secret, not stored directly
+  timezone?: string;
   lastSentTs: number;
   sendLogs: SendLog[];
 }

@@ -3,6 +3,8 @@ import type { Env } from './core-utils';
 import { AuthEntity, MessageEntity, SettingsEntity } from "./entities";
 import { ok, bad, notFound, isStr } from './core-utils';
 import type { AuthUser, Settings } from "@shared/types";
+import { format } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 const MASK_PHONE = (phone: string) => `${phone.substring(0, 3)}****${phone.substring(7)}`;
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
   // --- Liuyan Studio Routes ---
@@ -86,19 +88,20 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     let status = 'success';
     let responseSnippet = `Mock send: ${newMessages.length} messages.`;
     if (settings.provider === 'http') {
-      const plainTextBody = `You have ${newMessages.length} new message(s):\n\n` +
-        newMessages.map(m => `${m.phoneMasked} at ${new Date(m.ts).toLocaleString()}:\n${m.text}`).join('\n\n---\n\n');
+      const locale = settings.timezone === 'Asia/Shanghai' ? zhCN : undefined;
+      const plainTextBody = `您有 ${newMessages.length} 条新���言:\n\n` +
+        newMessages.map(m => `${m.phoneMasked} at ${format(new Date(m.ts), 'Pp', { locale })}:\n${m.text}`).join('\n\n---\n\n');
       const htmlBody = `
         <html>
           <body style="font-family: sans-serif; line-height: 1.6;">
-            <h1 style="color: #333;">Daily Messages Summary</h1>
-            <p>You have ${newMessages.length} new message(s) since the last summary.</p>
+            <h1 style="color: #333;">每日留言摘要</h1>
+            <p>自上次汇总以��，您收到了 ${newMessages.length} 条新留言。</p>
             <hr>
             ${newMessages.map(m => `
               <div style="margin-bottom: 1.5em; padding: 1em; border-left: 3px solid #F38020; background-color: #f9f9f9;">
                 <p style="margin: 0; color: #555;">
-                  <strong>${m.phoneMasked}</strong> - 
-                  <span style="font-size: 0.9em; color: #777;">${new Date(m.ts).toLocaleString()}</span>
+                  <strong>${m.phoneMasked}</strong> -
+                  <span style="font-size: 0.9em; color: #777;">${format(new Date(m.ts), 'Pp', { locale })}</span>
                 </p>
                 <p style="margin-top: 0.5em; color: #333;">${m.text}</p>
               </div>
@@ -117,13 +120,13 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
             },
             body: JSON.stringify({
               to: settings.recipient,
-              subject: `New Messages from 留声 - ${new Date().toLocaleDateString()}`,
+              subject: `【留声】新留言 - ${format(new Date(), 'PPP', { locale })}`,
               text: plainTextBody,
               html: htmlBody,
             }),
           });
           if (resp.ok) {
-            responseSnippet = `HTTP send success: ${resp.status}`;
+            responseSnippet = `HTTP send success: ${resp.status} - Delivered`;
             success = true;
           } else {
             throw new Error(`API returned ${resp.status}`);
@@ -131,7 +134,7 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         } catch (e: unknown) {
           const errMsg = (e as Error)?.message ?? 'Unknown error';
           status = 'failure';
-          responseSnippet = `HTTP send failed (attempt ${attempts + 1}): ${errMsg}`;
+          responseSnippet = `HTTP send failed (attempt ${attempts + 1}): ${errMsg} - Bounced`;
           if (attempts < 1) {
             await new Promise(r => setTimeout(r, 1000)); // wait 1s before retry
           }
