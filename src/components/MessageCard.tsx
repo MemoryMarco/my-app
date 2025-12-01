@@ -11,6 +11,7 @@ import { UserCircle2, Heart, MessageCircle, Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { toast } from "sonner";
 type MessageOrReply = (Message | Reply) & { messageId?: string };
 interface MessageCardProps {
   message: MessageOrReply;
@@ -50,6 +51,7 @@ export function MessageCard({ message, isLoading, level = 0, onReply, onLike }: 
       setReplyText('');
       setIsReplying(false);
     } catch (error) {
+      toast.error('回复失败，��稍后再试。');
       console.error("Reply submission failed:", error);
     } finally {
       setIsPostingReply(false);
@@ -58,10 +60,12 @@ export function MessageCard({ message, isLoading, level = 0, onReply, onLike }: 
   const isReply = level > 0;
   const targetType = isReply ? 'reply' : 'message';
   const renderReplies = () => {
-    if (!message.replies || message.replies.length === 0) return null;
+    const replies = message.replies || [];
+    if (replies.length === 0) return null;
+    const sortedReplies = [...replies].sort((a, b) => a.ts - b.ts);
     const repliesContent = (
       <div className={cn("mt-2 space-y-3", level > 0 ? "ml-4 pl-4 border-l-2" : "md:ml-8 ml-4 pl-4 border-l-2 border-border/80")}>
-        {message.replies.map(reply => (
+        {sortedReplies.map(reply => (
           <MessageCard key={reply.id} message={reply} level={level + 1} onReply={onReply} onLike={onLike} />
         ))}
       </div>
@@ -71,7 +75,7 @@ export function MessageCard({ message, isLoading, level = 0, onReply, onLike }: 
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="replies" className="border-none">
             <AccordionTrigger className="text-xs text-muted-foreground hover:no-underline py-1">
-              {message.replies.length} 条回复
+              {replies.length} 条回复
             </AccordionTrigger>
             <AccordionContent>{repliesContent}</AccordionContent>
           </AccordionItem>

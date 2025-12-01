@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, Variants } from 'framer-motion';
 import { MessageSquare, Send, Settings, Loader2, LogIn, Mail, Phone, KeyRound, Info, Percent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,28 +15,28 @@ import type { Message, Settings as AppSettings, AuthUser, Reply } from '@shared/
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { z } from 'zod';
-import { produce } from 'immer';interface TooltipContentProps {children?: React.ReactNode;className?: string;style?: React.CSSProperties;[key: string]: unknown;}interface TooltipContentProps {children?: React.ReactNode;className?: string;style?: React.CSSProperties;[key: string]: unknown;}
+import { produce } from 'immer';
 type AuthStep = 'phone' | 'otp';
 const MASK_PHONE = (phone: string) => phone ? `${phone.substring(0, 3)}****${phone.substring(7)}` : '';
 const settingsSchema = z.object({
-  recipient: z.string().email({ message: "请输入有��的邮箱地址。" }),
+  recipient: z.string().email({ message: "请���入有效的邮箱地址。" }),
   provider: z.enum(['mock', 'http']),
   apiUrl: z.string().url({ message: "请输入有效的 URL。" }).optional().or(z.literal('')),
   apiKey: z.string().optional(),
   timezone: z.string().optional()
-}).refine((data) => data.provider !== 'http' || data.apiUrl && data.apiUrl.length > 0, {
+}).refine((data) => data.provider !== 'http' || (data.apiUrl && data.apiUrl.length > 0), {
   message: "HTTP Provider 需要 API URL。",
   path: ["apiUrl"]
 });
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.07, delayChildren: 0.2 } }
 };
-const cardVariants = {
+const cardVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } }
 };
@@ -118,7 +118,7 @@ export function HomePage() {
       setAuthSheetOpen(false);
       setPhone('');setOtp('');setAuthStep('phone');
     } catch (error) {
-      toast.error('验证码错误或已过���。');
+      toast.error('验证码错误或已过��。');
     } finally {
       setIsOtpLoading(false);
     }
@@ -168,7 +168,7 @@ export function HomePage() {
   };
   const handleToggleLike = useCallback(async (targetId: string, type: 'message' | 'reply') => {
     if (!isLoggedIn) {
-      toast.error("请先登录再点赞");
+      toast.error("请先登录再���赞");
       setAuthSheetOpen(true);
       return;
     }
@@ -290,7 +290,6 @@ export function HomePage() {
               <Button variant="ghost" size="icon" onClick={handleOpenSettings} aria-label="打开设置"><Settings className="h-5 w-5" /></Button>
               {isLoggedIn ?
               <Button variant="outline" size="sm" onClick={auth.logout}>登出</Button> :
-
               <Button size="sm" onClick={() => setAuthSheetOpen(true)} className="btn-gradient">登录</Button>
               }
             </div>
@@ -310,19 +309,16 @@ export function HomePage() {
                       <MessageCard message={msg} onReply={handleReply} onLike={handleToggleLike} />
                     </motion.div>
                 ) :
-
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="text-center py-16 border rounded-2xl bg-card/50 relative overflow-hidden">
-
                     <div
                     className="absolute inset-0 bg-cover bg-center opacity-20"
                     style={{ backgroundImage: "url('https://images.unsplash.com/photo-1507002130669-32c1cf614865?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80')" }} />
-
                     <div className="relative z-10">
-                      <h3 className="text-xl font-semibold text-foreground">这里��空如也</h3>
-                      <p className="mt-2 text-muted-foreground">还没有留言，快来发布第一条吧！</p>
+                      <h3 className="text-xl font-semibold text-foreground">这里空���也</h3>
+                      <p className="mt-2 text-muted-foreground">还没有留言��快来发布第一条吧！</p>
                     </div>
                   </motion.div>
                 }
@@ -338,9 +334,8 @@ export function HomePage() {
                         {isPosting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />} 发布
                       </Button>
                     </> :
-
                   <div className="text-center py-8 space-y-4">
-                      <p className="text-muted-foreground">登录后即可发布留言</p>
+                      <p className="text-muted-foreground">登录后即可发布���言</p>
                       <Button onClick={() => setAuthSheetOpen(true)} className="btn-gradient">
                         <LogIn className="mr-2 h-4 w-4" /> 手机号登录
                       </Button>
@@ -355,24 +350,23 @@ export function HomePage() {
           <SheetContent><SheetHeader><SheetTitle>登录 / 注册</SheetTitle><SheetDescription>通过手机验证码登录，体验完整功能。</SheetDescription></SheetHeader>
             <div className="py-8 space-y-6">
               {authStep === 'phone' && <div className="space-y-4"><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="tel" placeholder="请输入手机号" value={phone} onChange={(e) => setPhone(e.target.value)} className="pl-10" aria-label="手机号输入框" /></div><Button onClick={handleRequestOtp} disabled={isOtpLoading || countdown > 0} className="w-full btn-gradient">{isOtpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{countdown > 0 ? `${countdown}s 后重试` : '获取验证码'}</Button></div>}
-              {authStep === 'otp' && <div className="space-y-4 text-center"><p className="text-sm text-muted-foreground">验证码已发送至 {phone}</p><div className="flex justify-center"><InputOTP maxLength={6} value={otp} onChange={setOtp} aria-label="验证码输入框"><InputOTPGroup><InputOTPSlot index={0} /><InputOTPSlot index={1} /><InputOTPSlot index={2} /><InputOTPSlot index={3} /><InputOTPSlot index={4} /><InputOTPSlot index={5} /></InputOTPGroup></InputOTP></div><Button onClick={handleVerifyOtp} disabled={isOtpLoading} className="w-full btn-gradient">{isOtpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}验证并登录</Button><Button variant="link" size="sm" onClick={() => {setAuthStep('phone');setOtp('');}}>返回</Button></div>}
+              {authStep === 'otp' && <div className="space-y-4 text-center"><p className="text-sm text-muted-foreground">验证码已发送至 {phone}</p><div className="flex justify-center"><InputOTP maxLength={6} value={otp} onChange={setOtp} aria-label="验证码输入框"><InputOTPGroup><InputOTPSlot index={0} /><InputOTPSlot index={1} /><InputOTPSlot index={2} /><InputOTPSlot index={3} /><InputOTPSlot index={4} /><InputOTPSlot index={5} /></InputOTPGroup></InputOTP></div><Button onClick={handleVerifyOtp} disabled={isOtpLoading} className="w-full btn-gradient">{isOtpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}验证并登录</Button><Button variant="link" size="sm" onClick={() => {setAuthStep('phone');setOtp('');}}>返���</Button></div>}
             </div>
           </SheetContent>
         </Sheet>
         <Sheet open={isSettingsSheetOpen} onOpenChange={setSettingsSheetOpen}>
-          <SheetContent className="sm:max-w-lg overflow-y-auto"><SheetHeader><SheetTitle>邮件设置</SheetTitle><SheetDescription>配置留言接收邮箱。留言将在工作日晚 8 点汇总发送。</SheetDescription></SheetHeader>
+          <SheetContent className="sm:max-w-lg overflow-y-auto"><SheetHeader><SheetTitle>邮件设置</SheetTitle><SheetDescription>配置留言���收邮箱。留言将在工作日晚 8 点汇总发送。</SheetDescription></SheetHeader>
             <div className="py-8 space-y-6">
-              {isSettingsLoading && !settings.recipient ? <Skeleton className="h-48 w-full" /> : <div className="space-y-4"><div className="space-y-2"><label className="text-sm font-medium">收件邮箱</label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="email" placeholder="your-email@example.com" value={settings.recipient || ''} onChange={(e) => setSettings((s) => ({ ...s, recipient: e.target.value }))} className="pl-10" aria-label="收件邮箱" /></div></div><div className="space-y-2"><label className="text-sm font-medium">发送方式</label><Select value={settings.provider} onValueChange={(v) => setSettings((s) => ({ ...s, provider: v as 'mock' | 'http' }))}><SelectTrigger aria-label="选择发送方式"><SelectValue placeholder="选择发送方式" /></SelectTrigger><SelectContent><SelectItem value="mock">Mock (演示)</SelectItem><SelectItem value="http">HTTP Provider</SelectItem></SelectContent></Select></div>{settings.provider === 'http' && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 overflow-hidden"><div className="space-y-2"><label className="text-sm font-medium">API URL</label><Input placeholder="https://api.sendgrid.com/v3/mail/send" value={settings.apiUrl || ''} onChange={(e) => setSettings((s) => ({ ...s, apiUrl: e.target.value }))} aria-label="API URL" /></div><div className="space-y-2"><label className="text-sm font-medium">API Key</label><Tooltip><TooltipTrigger asChild><div className="relative"><Input type="password" placeholder="••••••••••••••••" value={settings.apiKey || ''} onChange={(e) => setSettings((s) => ({ ...s, apiKey: e.target.value }))} aria-label="API Key" /><Info className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /></div></TooltipTrigger><TooltipContent><p className="text-xs">���用于演示。生产环境请使用 Worker Secrets。</p></TooltipContent></Tooltip></div></motion.div>}<div className="space-y-2"><label className="text-sm font-medium">时区</label><Select value={settings.timezone} onValueChange={(v) => setSettings((s) => ({ ...s, timezone: v }))}><SelectTrigger aria-label="选择时区"><SelectValue placeholder="选择时区" /></SelectTrigger><SelectContent><SelectItem value="UTC">UTC</SelectItem><SelectItem value="Asia/Shanghai">Asia/Shanghai (UTC+8)</SelectItem></SelectContent></Select></div></div>}
+              {isSettingsLoading && !settings.recipient ? <Skeleton className="h-48 w-full" /> : <div className="space-y-4"><div className="space-y-2"><label className="text-sm font-medium">收件邮箱</label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="email" placeholder="your-email@example.com" value={settings.recipient || ''} onChange={(e) => setSettings((s) => ({ ...s, recipient: e.target.value }))} className="pl-10" aria-label="收件邮箱" /></div></div><div className="space-y-2"><label className="text-sm font-medium">发送方式</label><Select value={settings.provider} onValueChange={(v) => setSettings((s) => ({ ...s, provider: v as 'mock' | 'http' }))}><SelectTrigger aria-label="选择发送方式"><SelectValue placeholder="选择发送方式" /></SelectTrigger><SelectContent><SelectItem value="mock">Mock (演示)</SelectItem><SelectItem value="http">HTTP Provider</SelectItem></SelectContent></Select></div>{settings.provider === 'http' && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 overflow-hidden"><div className="space-y-2"><label className="text-sm font-medium">API URL</label><Input placeholder="https://api.sendgrid.com/v3/mail/send" value={settings.apiUrl || ''} onChange={(e) => setSettings((s) => ({ ...s, apiUrl: e.target.value }))} aria-label="API URL" /></div><div className="space-y-2"><label className="text-sm font-medium">API Key</label><Tooltip><TooltipTrigger asChild><div className="relative"><Input type="password" placeholder="••••••••••••••••" value={settings.apiKey || ''} onChange={(e) => setSettings((s) => ({ ...s, apiKey: e.target.value }))} aria-label="API Key" /><Info className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /></div></TooltipTrigger><TooltipContent><p className="text-xs">��用于演示。生产环境请使用 Worker Secrets。</p></TooltipContent></Tooltip></div></motion.div>}<div className="space-y-2"><label className="text-sm font-medium">时区</label><Select value={settings.timezone} onValueChange={(v) => setSettings((s) => ({ ...s, timezone: v }))}><SelectTrigger aria-label="选择时区"><SelectValue placeholder="选择时区" /></SelectTrigger><SelectContent><SelectItem value="UTC">UTC</SelectItem><SelectItem value="Asia/Shanghai">Asia/Shanghai (UTC+8)</SelectItem></SelectContent></Select></div></div>}
               <div className="space-y-2"><Button onClick={handleSaveSettings} disabled={isSettingsLoading} className="w-full">{isSettingsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} 保存设置</Button><Button onClick={handleSendNow} disabled={isSettingsLoading} variant="outline" className="w-full">{isSettingsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} 立即发送测试</Button></div>
-              <Accordion type="single" collapsible className="w-full"><AccordionItem value="logs"><AccordionTrigger>最近发送记录</AccordionTrigger><AccordionContent>{isSettingsLoading && !settings.sendLogs ? <Skeleton className="h-20 w-full" /> : settings.sendLogs && settings.sendLogs.length > 0 ? <div className="space-y-4"><div className="flex items-center text-sm font-medium text-muted-foreground"><Percent className="h-4 w-4 mr-2" /><span>��功率: {successRate}%</span></div>{settings.sendLogs.slice(0, 5).map((log) => <motion.div key={log.ts} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm border-l-2 pl-3" style={{ borderColor: log.status === 'success' ? 'hsl(var(--primary))' : 'hsl(var(--destructive))' }}><p className="font-medium">{log.messageCount} 条留言 - <span className={log.status === 'success' ? 'text-primary' : 'text-destructive'}>{log.status}</span></p><p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(log.ts), { addSuffix: true, locale: zhCN })}</p><p className="text-xs text-muted-foreground truncate" title={log.responseSnippet}>{log.responseSnippet}</p></motion.div>)}</div> : <p className="text-sm text-muted-foreground text-center py-4">暂无记录</p>}</AccordionContent></AccordionItem></Accordion>
+              <Accordion type="single" collapsible className="w-full"><AccordionItem value="logs"><AccordionTrigger>最近发送记录</AccordionTrigger><AccordionContent>{isSettingsLoading && !settings.sendLogs ? <Skeleton className="h-20 w-full" /> : settings.sendLogs && settings.sendLogs.length > 0 ? <div className="space-y-4"><div className="flex items-center text-sm font-medium text-muted-foreground"><Percent className="h-4 w-4 mr-2" /><span>成功率: {successRate}%</span></div>{settings.sendLogs.slice(0, 5).map((log) => <motion.div key={log.ts} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm border-l-2 pl-3" style={{ borderColor: log.status === 'success' ? 'hsl(var(--primary))' : 'hsl(var(--destructive))' }}><p className="font-medium">{log.messageCount} 条留言 - <span className={log.status === 'success' ? 'text-primary' : 'text-destructive'}>{log.status}</span></p><p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(log.ts), { addSuffix: true, locale: zhCN })}</p><p className="text-xs text-muted-foreground truncate" title={log.responseSnippet}>{log.responseSnippet}</p></motion.div>)}</div> : <p className="text-sm text-muted-foreground text-center py-4">暂无记录</p>}</AccordionContent></AccordionItem></Accordion>
             </div>
           </SheetContent>
         </Sheet>
         <Toaster richColors closeButton />
         <footer className="py-8 text-center text-muted-foreground/80 text-sm">
-          <p>Built with ❤️ at Cloudflare</p>
+          <p>Built with ��️ at Cloudflare</p>
         </footer>
       </div>
     </TooltipProvider>);
-
 }
