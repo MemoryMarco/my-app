@@ -30,7 +30,9 @@ export const useMessagesStore = defineStore('messages', () => {
       }
     } catch (error) {
       console.error('Failed to post message:', error)
+      // Here you would show a toast
     }
   }
+  // Add optimistic updates for replies and likes here in a real app
   return { messages, isLoading, fetchMessages, postMessage }
 })
