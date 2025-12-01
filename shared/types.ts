@@ -4,11 +4,33 @@ export interface ApiResponse<T = unknown> {
   error?: string;
 }
 // --- Liuyan Studio Types ---
+export interface Reply {
+  id: string;
+  messageId: string; // Root message ID
+  parentId: string; // Immediate parent (message or another reply)
+  userId: string;
+  phoneMasked: string;
+  text: string;
+  ts: number;
+  likes: number;
+  likedByUser?: boolean;
+  replies: Reply[];
+}
 export interface Message {
   id: string;
   userId: string;
   phoneMasked: string;
   text: string;
+  ts: number;
+  replies: Reply[];
+  likes: number;
+  likedByUser?: boolean;
+}
+export interface Like {
+  id: string;
+  targetId: string; // message.id or reply.id
+  targetType: 'message' | 'reply';
+  userId: string;
   ts: number;
 }
 export interface Settings {
@@ -24,6 +46,8 @@ export interface Settings {
 export interface SendLog {
   ts: number;
   messageCount: number;
+  replyCount?: number;
+  likeCount?: number;
   status: 'success' | 'failure';
   responseSnippet: string;
 }

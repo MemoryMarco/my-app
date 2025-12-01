@@ -1,16 +1,32 @@
 /**
- * Liuyan Studio Entities: Message, Settings, Auth
+ * Liuyan Studio Entities: Message, Settings, Auth, Reply, Like
  * Also includes original demo entities for template compatibility.
  */
-import { IndexedEntity, Entity } from "./core-utils";
-import type { User, Chat, ChatMessage, Message, Settings, AuthUser } from "@shared/types";
-import { MOCK_CHAT_MESSAGES, MOCK_CHATS, MOCK_USERS, MOCK_MESSAGES } from "@shared/mock-data";
+import { IndexedEntity, Entity, Env } from "./core-utils";
+import type { User, Chat, ChatMessage, Message, Settings, AuthUser, Reply, Like } from "@shared/types";
+import { MOCK_CHAT_MESSAGES, MOCK_CHATS, MOCK_USERS, MOCK_MESSAGES, MOCK_REPLIES, MOCK_LIKES } from "@shared/mock-data";
 // --- Liuyan Studio Entities ---
 export class MessageEntity extends IndexedEntity<Message> {
   static readonly entityName = "message";
   static readonly indexName = "messages";
-  static readonly initialState: Message = { id: "", userId: "", phoneMasked: "", text: "", ts: 0 };
+  static readonly initialState: Message = { id: "", userId: "", phoneMasked: "", text: "", ts: 0, replies: [], likes: 0 };
   static seedData = MOCK_MESSAGES;
+}
+export class ReplyEntity extends IndexedEntity<Reply> {
+  static readonly entityName = "reply";
+  static readonly indexName = "replies";
+  static readonly initialState: Reply = { id: "", messageId: "", parentId: "", userId: "", phoneMasked: "", text: "", ts: 0, likes: 0, replies: [] };
+  static seedData = MOCK_REPLIES;
+}
+export class LikeEntity extends IndexedEntity<Like> {
+  static readonly entityName = "like";
+  static readonly indexName = "likes";
+  static readonly initialState: Like = { id: "", targetId: "", targetType: "message", userId: "", ts: 0 };
+  static seedData = MOCK_LIKES;
+  static async findByUserAndTarget(env: Env, userId: string, targetId: string): Promise<Like | null> {
+    const { items } = await this.list(env);
+    return items.find(like => like.userId === userId && like.targetId === targetId) || null;
+  }
 }
 export class SettingsEntity extends Entity<Settings> {
   static readonly entityName = "settings";
