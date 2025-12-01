@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MessageSquare, Send, Settings, Loader2, LogIn, Mail, Phone, KeyRound, Info, Percent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import type { Message, Settings as AppSettings, AuthUser, Reply } from '@shared/
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { z } from 'zod';
@@ -23,7 +23,7 @@ import { produce } from 'immer';
 type AuthStep = 'phone' | 'otp';
 const MASK_PHONE = (phone: string) => phone ? `${phone.substring(0, 3)}****${phone.substring(7)}` : '';
 const settingsSchema = z.object({
-  recipient: z.string().email({ message: "请输入有效的邮箱地址。" }),
+  recipient: z.string().email({ message: "请输入有��的邮箱地址。" }),
   provider: z.enum(['mock', 'http']),
   apiUrl: z.string().url({ message: "请输入有效的 URL。" }).optional().or(z.literal('')),
   apiKey: z.string().optional(),
@@ -34,11 +34,11 @@ const settingsSchema = z.object({
 });
 const containerVariants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.07 } },
+  visible: { opacity: 1, transition: { staggerChildren: 0.07, delayChildren: 0.2 } },
 };
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 },
+  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } },
 };
 export function HomePage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -62,7 +62,8 @@ export function HomePage() {
       const data = await api<{ items: Message[] }>('/api/messages');
       setMessages(data.items);
     } catch (error) {
-      toast.error('��载留言失败。');
+      toast.error('加载留言失败。');
+      console.error("Failed to fetch messages:", error);
     } finally {
       setIsLoading(false);
     }
@@ -70,16 +71,21 @@ export function HomePage() {
   useEffect(() => {
     fetchMessages();
     const handleAuthChange = () => {
-      setIsLoggedIn(auth.isLoggedIn());
+      const loggedIn = auth.isLoggedIn();
+      setIsLoggedIn(loggedIn);
       setCurrentUser(auth.getCurrentUser());
-      if (auth.isLoggedIn()) fetchMessages(); // Re-fetch to get user-specific data like `likedByUser`
+      if (loggedIn) {
+        fetchMessages(); // Re-fetch to get user-specific data like `likedByUser`
+      }
     };
     window.addEventListener('auth-change', handleAuthChange);
     return () => window.removeEventListener('auth-change', handleAuthChange);
   }, [fetchMessages]);
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (countdown > 0) timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
     return () => clearTimeout(timer);
   }, [countdown]);
   const handleRequestOtp = async () => {
@@ -112,19 +118,19 @@ export function HomePage() {
       setAuthSheetOpen(false);
       setPhone(''); setOtp(''); setAuthStep('phone');
     } catch (error) {
-      toast.error('验证码错误或已过��。');
+      toast.error('验证码错误或已过���。');
     } finally {
       setIsOtpLoading(false);
     }
   };
   const handlePostMessage = async () => {
     const postText = newMessage.trim();
-    if (!postText) return;
+    if (!postText || !currentUser) return;
     setIsPosting(true);
     const optimisticMessage: Message = {
       id: `temp-${Date.now()}`,
-      userId: currentUser!.id,
-      phoneMasked: MASK_PHONE(currentUser!.phone),
+      userId: currentUser.id,
+      phoneMasked: MASK_PHONE(currentUser.phone),
       text: postText,
       ts: Date.now(),
       replies: [],
@@ -136,7 +142,7 @@ export function HomePage() {
     try {
       const postedMessage = await api<Message>('/api/messages', { method: 'POST', body: JSON.stringify({ text: postText }) });
       setMessages(prev => prev.map(m => m.id === optimisticMessage.id ? postedMessage : m));
-      toast.success('���言成功！');
+      toast.success('留言成功！');
     } catch (error) {
       toast.error('发布失败，请重新登录。');
       setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
@@ -162,11 +168,10 @@ export function HomePage() {
   };
   const handleToggleLike = useCallback(async (targetId: string, type: 'message' | 'reply') => {
     if (!isLoggedIn) {
-      toast.error("请先登录再��赞");
+      toast.error("请先登录再点赞");
       setAuthSheetOpen(true);
       return;
     }
-    // Optimistic update
     setMessages(prev => updateNestedState(prev, targetId, item => {
       if (item.likedByUser) {
         item.likes -= 1;
@@ -180,9 +185,8 @@ export function HomePage() {
       await api(`/api/likes/${targetId}?type=${type}`, { method: 'PUT' });
     } catch (error) {
       toast.error("操作失败");
-      // Revert
       setMessages(prev => updateNestedState(prev, targetId, item => {
-        if (item.likedByUser) { // This is the new state, so revert it
+        if (item.likedByUser) {
           item.likes -= 1;
           item.likedByUser = false;
         } else {
@@ -193,7 +197,7 @@ export function HomePage() {
     }
   }, [isLoggedIn]);
   const handleReply = useCallback(async (parentId: string, text: string, messageId: string) => {
-    if (!isLoggedIn) {
+    if (!isLoggedIn || !currentUser) {
       toast.error("请先登录再回复");
       setAuthSheetOpen(true);
       return;
@@ -201,8 +205,8 @@ export function HomePage() {
     const optimisticReply: Reply = {
       id: `temp-reply-${Date.now()}`,
       parentId, messageId, text,
-      userId: currentUser!.id,
-      phoneMasked: MASK_PHONE(currentUser!.phone),
+      userId: currentUser.id,
+      phoneMasked: MASK_PHONE(currentUser.phone),
       ts: Date.now(),
       replies: [],
       likes: 0,
@@ -231,7 +235,7 @@ export function HomePage() {
       const data = await api<AppSettings>('/api/settings/email');
       setSettings(data);
     } catch (error) {
-      toast.error('无法加载设���。');
+      toast.error('无法加载设置。');
     } finally {
       setIsSettingsLoading(false);
     }
@@ -258,7 +262,7 @@ export function HomePage() {
     try {
       const result = await api<{ status: string; sentCount: number }>('/api/send-weekly', { method: 'POST' });
       toast.success(`发送成功: ${result.sentCount}条新留言`, { description: result.status });
-      handleOpenSettings(); // Refresh settings to show new log
+      handleOpenSettings();
     } catch (error) {
       toast.error((error as Error).message || '发送失败。');
     } finally {
@@ -287,7 +291,7 @@ export function HomePage() {
               {isLoggedIn ? (
                 <Button variant="outline" size="sm" onClick={auth.logout}>登出</Button>
               ) : (
-                <Button size="sm" onClick={() => setAuthSheetOpen(true)} className="btn-gradient">���录</Button>
+                <Button size="sm" onClick={() => setAuthSheetOpen(true)} className="btn-gradient">登录</Button>
               )}
             </div>
           </div>
@@ -302,19 +306,30 @@ export function HomePage() {
                   ))
                 ) : messages.length > 0 ? (
                   messages.map((msg) => (
-                    <motion.div key={msg.id} variants={cardVariants}>
+                    <motion.div key={msg.id} variants={cardVariants} layout>
                       <MessageCard message={msg} onReply={handleReply} onLike={handleToggleLike} />
                     </motion.div>
                   ))
                 ) : (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16 border rounded-2xl bg-card/50">
-                    <p className="text-muted-foreground">还没有留言，快��发布第一条吧！</p>
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }} 
+                    animate={{ opacity: 1, scale: 1 }} 
+                    className="text-center py-16 border rounded-2xl bg-card/50 relative overflow-hidden"
+                  >
+                    <div 
+                      className="absolute inset-0 bg-cover bg-center opacity-20" 
+                      style={{backgroundImage: "url('https://images.unsplash.com/photo-1507002130669-32c1cf614865?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80')"}}
+                    />
+                    <div className="relative z-10">
+                      <h3 className="text-xl font-semibold text-foreground">这里��空如也</h3>
+                      <p className="mt-2 text-muted-foreground">还没有留言，快来发布第一条吧！</p>
+                    </div>
                   </motion.div>
                 )}
               </motion.div>
               <div className="md:col-span-1 sticky top-24">
                 <div className="p-6 rounded-2xl bg-card shadow-soft space-y-4">
-                  <h2 className="text-xl font-semibold">记���此刻</h2>
+                  <h2 className="text-xl font-semibold">记录此刻</h2>
                   {isLoggedIn ? (
                     <>
                       <p className="text-sm text-muted-foreground">欢迎, {currentUser?.phone ? MASK_PHONE(currentUser.phone) : '用户'}</p>
@@ -337,25 +352,25 @@ export function HomePage() {
           </div>
         </main>
         <Sheet open={isAuthSheetOpen} onOpenChange={setAuthSheetOpen}>
-          <SheetContent><SheetHeader><SheetTitle>登录 / 注册</SheetTitle><SheetDescription>通过手机验��码登录，体验完整功能。</SheetDescription></SheetHeader>
+          <SheetContent><SheetHeader><SheetTitle>登录 / 注册</SheetTitle><SheetDescription>通过手机验证码登录，体验完整功能。</SheetDescription></SheetHeader>
             <div className="py-8 space-y-6">
-              {authStep === 'phone' && (<div className="space-y-4"><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="tel" placeholder="请输入手机号" value={phone} onChange={e => setPhone(e.target.value)} className="pl-10" aria-label="手机号输入框" /></div><Button onClick={handleRequestOtp} disabled={isOtpLoading || countdown > 0} className="w-full btn-gradient">{isOtpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{countdown > 0 ? `${countdown}s ��重试` : '获取验证码'}</Button></div>)}
+              {authStep === 'phone' && (<div className="space-y-4"><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="tel" placeholder="请输入手机号" value={phone} onChange={e => setPhone(e.target.value)} className="pl-10" aria-label="手机号输入框" /></div><Button onClick={handleRequestOtp} disabled={isOtpLoading || countdown > 0} className="w-full btn-gradient">{isOtpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{countdown > 0 ? `${countdown}s 后重试` : '获取验证码'}</Button></div>)}
               {authStep === 'otp' && (<div className="space-y-4 text-center"><p className="text-sm text-muted-foreground">验证码已发送至 {phone}</p><div className="flex justify-center"><InputOTP maxLength={6} value={otp} onChange={setOtp} aria-label="验证码输入框"><InputOTPGroup><InputOTPSlot index={0} /><InputOTPSlot index={1} /><InputOTPSlot index={2} /><InputOTPSlot index={3} /><InputOTPSlot index={4} /><InputOTPSlot index={5} /></InputOTPGroup></InputOTP></div><Button onClick={handleVerifyOtp} disabled={isOtpLoading} className="w-full btn-gradient">{isOtpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}验证并登录</Button><Button variant="link" size="sm" onClick={() => { setAuthStep('phone'); setOtp(''); }}>返回</Button></div>)}
             </div>
           </SheetContent>
         </Sheet>
         <Sheet open={isSettingsSheetOpen} onOpenChange={setSettingsSheetOpen}>
-          <SheetContent className="sm:max-w-lg overflow-y-auto"><SheetHeader><SheetTitle>邮���设置</SheetTitle><SheetDescription>配置留言接收邮箱。留言将在工作日晚 8 点汇总发送。</SheetDescription></SheetHeader>
+          <SheetContent className="sm:max-w-lg overflow-y-auto"><SheetHeader><SheetTitle>邮件设置</SheetTitle><SheetDescription>配置留言接收邮箱。留言将在工作日晚 8 点汇总发送。</SheetDescription></SheetHeader>
             <div className="py-8 space-y-6">
-              {isSettingsLoading && !settings.recipient ? <Skeleton className="h-48 w-full" /> : (<div className="space-y-4"><div className="space-y-2"><label className="text-sm font-medium">收件邮箱</label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="email" placeholder="your-email@example.com" value={settings.recipient || ''} onChange={e => setSettings(s => ({ ...s, recipient: e.target.value }))} className="pl-10" aria-label="收件邮箱" /></div></div><div className="space-y-2"><label className="text-sm font-medium">发送方式</label><Select value={settings.provider} onValueChange={(v) => setSettings(s => ({ ...s, provider: v as 'mock' | 'http' }))}><SelectTrigger aria-label="选择发送方式"><SelectValue placeholder="选择发送方式" /></SelectTrigger><SelectContent><SelectItem value="mock">Mock (演示)</SelectItem><SelectItem value="http">HTTP Provider</SelectItem></SelectContent></Select></div>{settings.provider === 'http' && (<motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 overflow-hidden"><div className="space-y-2"><label className="text-sm font-medium">API URL</label><Input placeholder="https://api.sendgrid.com/v3/mail/send" value={settings.apiUrl || ''} onChange={e => setSettings(s => ({ ...s, apiUrl: e.target.value }))} aria-label="API URL" /></div><div className="space-y-2"><label className="text-sm font-medium">API Key</label><Tooltip><TooltipTrigger asChild><div className="relative"><Input type="password" placeholder="••••••••••••••••" value={settings.apiKey || ''} onChange={e => setSettings(s => ({ ...s, apiKey: e.target.value }))} aria-label="API Key" /><Info className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /></div></TooltipTrigger><TooltipContent><p className="text-xs">仅���于演示。生产环境请使用 Worker Secrets。</p></TooltipContent></Tooltip></div></motion.div>)}<div className="space-y-2"><label className="text-sm font-medium">时区</label><Select value={settings.timezone} onValueChange={(v) => setSettings(s => ({ ...s, timezone: v }))}><SelectTrigger aria-label="选择时区"><SelectValue placeholder="选择时区" /></SelectTrigger><SelectContent><SelectItem value="UTC">UTC</SelectItem><SelectItem value="Asia/Shanghai">Asia/Shanghai (UTC+8)</SelectItem></SelectContent></Select></div></div>)}
+              {isSettingsLoading && !settings.recipient ? <Skeleton className="h-48 w-full" /> : (<div className="space-y-4"><div className="space-y-2"><label className="text-sm font-medium">收件邮箱</label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" /><Input type="email" placeholder="your-email@example.com" value={settings.recipient || ''} onChange={e => setSettings(s => ({ ...s, recipient: e.target.value }))} className="pl-10" aria-label="收件邮箱" /></div></div><div className="space-y-2"><label className="text-sm font-medium">发送方式</label><Select value={settings.provider} onValueChange={(v) => setSettings(s => ({ ...s, provider: v as 'mock' | 'http' }))}><SelectTrigger aria-label="选择发送方式"><SelectValue placeholder="选择发送方式" /></SelectTrigger><SelectContent><SelectItem value="mock">Mock (演示)</SelectItem><SelectItem value="http">HTTP Provider</SelectItem></SelectContent></Select></div>{settings.provider === 'http' && (<motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 overflow-hidden"><div className="space-y-2"><label className="text-sm font-medium">API URL</label><Input placeholder="https://api.sendgrid.com/v3/mail/send" value={settings.apiUrl || ''} onChange={e => setSettings(s => ({ ...s, apiUrl: e.target.value }))} aria-label="API URL" /></div><div className="space-y-2"><label className="text-sm font-medium">API Key</label><Tooltip><TooltipTrigger asChild><div className="relative"><Input type="password" placeholder="••••••••••••••••" value={settings.apiKey || ''} onChange={e => setSettings(s => ({ ...s, apiKey: e.target.value }))} aria-label="API Key" /><Info className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /></div></TooltipTrigger><TooltipContent><p className="text-xs">���用于演示。生产环境请使用 Worker Secrets。</p></TooltipContent></Tooltip></div></motion.div>)}<div className="space-y-2"><label className="text-sm font-medium">时区</label><Select value={settings.timezone} onValueChange={(v) => setSettings(s => ({ ...s, timezone: v }))}><SelectTrigger aria-label="选择时区"><SelectValue placeholder="选择时区" /></SelectTrigger><SelectContent><SelectItem value="UTC">UTC</SelectItem><SelectItem value="Asia/Shanghai">Asia/Shanghai (UTC+8)</SelectItem></SelectContent></Select></div></div>)}
               <div className="space-y-2"><Button onClick={handleSaveSettings} disabled={isSettingsLoading} className="w-full">{isSettingsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} 保存设置</Button><Button onClick={handleSendNow} disabled={isSettingsLoading} variant="outline" className="w-full">{isSettingsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} 立即发送测试</Button></div>
-              <Accordion type="single" collapsible className="w-full"><AccordionItem value="logs"><AccordionTrigger>最近发送记录</AccordionTrigger><AccordionContent>{isSettingsLoading && !settings.sendLogs ? <Skeleton className="h-20 w-full" /> : settings.sendLogs && settings.sendLogs.length > 0 ? (<div className="space-y-4"><div className="flex items-center text-sm font-medium text-muted-foreground"><Percent className="h-4 w-4 mr-2" /><span>成功率: {successRate}%</span></div>{settings.sendLogs.slice(0, 5).map(log => (<motion.div key={log.ts} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm border-l-2 pl-3" style={{ borderColor: log.status === 'success' ? 'hsl(var(--primary))' : 'hsl(var(--destructive))' }}><p className="font-medium">{log.messageCount} 条留言 - <span className={log.status === 'success' ? 'text-primary' : 'text-destructive'}>{log.status}</span></p><p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(log.ts), { addSuffix: true, locale: zhCN })}</p><p className="text-xs text-muted-foreground truncate" title={log.responseSnippet}>{log.responseSnippet}</p></motion.div>))}</div>) : <p className="text-sm text-muted-foreground text-center py-4">暂无记录</p>}</AccordionContent></AccordionItem></Accordion>
+              <Accordion type="single" collapsible className="w-full"><AccordionItem value="logs"><AccordionTrigger>最近发送记录</AccordionTrigger><AccordionContent>{isSettingsLoading && !settings.sendLogs ? <Skeleton className="h-20 w-full" /> : settings.sendLogs && settings.sendLogs.length > 0 ? (<div className="space-y-4"><div className="flex items-center text-sm font-medium text-muted-foreground"><Percent className="h-4 w-4 mr-2" /><span>��功率: {successRate}%</span></div>{settings.sendLogs.slice(0, 5).map(log => (<motion.div key={log.ts} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm border-l-2 pl-3" style={{ borderColor: log.status === 'success' ? 'hsl(var(--primary))' : 'hsl(var(--destructive))' }}><p className="font-medium">{log.messageCount} 条留言 - <span className={log.status === 'success' ? 'text-primary' : 'text-destructive'}>{log.status}</span></p><p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(log.ts), { addSuffix: true, locale: zhCN })}</p><p className="text-xs text-muted-foreground truncate" title={log.responseSnippet}>{log.responseSnippet}</p></motion.div>))}</div>) : <p className="text-sm text-muted-foreground text-center py-4">暂无记录</p>}</AccordionContent></AccordionItem></Accordion>
             </div>
           </SheetContent>
         </Sheet>
         <Toaster richColors closeButton />
         <footer className="py-8 text-center text-muted-foreground/80 text-sm">
-          <p>Built with ���️ at Cloudflare</p>
+          <p>Built with ❤️ at Cloudflare</p>
         </footer>
       </div>
     </TooltipProvider>

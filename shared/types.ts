@@ -26,6 +26,7 @@ export interface Message {
   likes: number;
   likedByUser?: boolean;
 }
+export type MessageOrReply = Message | Reply;
 export interface Like {
   id: string;
   targetId: string; // message.id or reply.id

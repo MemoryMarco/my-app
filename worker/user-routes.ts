@@ -11,11 +11,18 @@ async function getSession(c: any): Promise<{ userId: string; phone: string } | n
   const token = authHeader?.split(' ')[1];
   if (!token) return null;
   const auth = new AuthEntity(c.env, 'auth-singleton');
-  return auth.verifySession(token);
+  const session = await auth.verifySession(token);
+  if (!session) {
+    console.warn(`Invalid session token received: ${token.substring(0, 8)}...`);
+    return null;
+  }
+  return session;
 }
 async function getReplyDepth(env: Env, replyId: string, depth = 0): Promise<number> {
-  if (depth > 5) return depth; // Safety break
-  const reply = await new ReplyEntity(env, replyId).getState();
+  if (depth > 5) return depth; // Safety break for deep recursion
+  const replyEntity = new ReplyEntity(env, replyId);
+  if (!(await replyEntity.exists())) return depth;
+  const reply = await replyEntity.getState();
   if (!reply.parentId || reply.parentId.startsWith('msg')) {
     return depth + 1;
   }
@@ -121,18 +128,31 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     const type = c.req.query('type') as 'message' | 'reply';
     if (!targetId || !['message', 'reply'].includes(type)) return bad(c, 'Invalid target.');
     const existingLike = await LikeEntity.findByUserAndTarget(c.env, session.userId, targetId);
-    const targetEntity = type === 'message' ? new MessageEntity(c.env, targetId) : new ReplyEntity(c.env, targetId);
+    let finalState: { liked: boolean; count: number };
     if (existingLike) {
       await LikeEntity.delete(c.env, existingLike.id);
-      await targetEntity.mutate(s => ({ ...s, likes: Math.max(0, (s.likes || 0) - 1) }));
-      const state = await targetEntity.getState();
-      return ok(c, { liked: false, count: state.likes });
+      if (type === 'message') {
+        const entity = new MessageEntity(c.env, targetId);
+        const state = await entity.mutate(s => ({ ...s, likes: Math.max(0, (s.likes || 0) - 1) }));
+        finalState = { liked: false, count: state.likes };
+      } else {
+        const entity = new ReplyEntity(c.env, targetId);
+        const state = await entity.mutate(s => ({ ...s, likes: Math.max(0, (s.likes || 0) - 1) }));
+        finalState = { liked: false, count: state.likes };
+      }
     } else {
       await LikeEntity.create(c.env, { id: crypto.randomUUID(), targetId, targetType: type, userId: session.userId, ts: Date.now() });
-      await targetEntity.mutate(s => ({ ...s, likes: (s.likes || 0) + 1 }));
-      const state = await targetEntity.getState();
-      return ok(c, { liked: true, count: state.likes });
+      if (type === 'message') {
+        const entity = new MessageEntity(c.env, targetId);
+        const state = await entity.mutate(s => ({ ...s, likes: (s.likes || 0) + 1 }));
+        finalState = { liked: true, count: state.likes };
+      } else {
+        const entity = new ReplyEntity(c.env, targetId);
+        const state = await entity.mutate(s => ({ ...s, likes: (s.likes || 0) + 1 }));
+        finalState = { liked: true, count: state.likes };
+      }
     }
+    return ok(c, finalState);
   });
   // SETTINGS & SEND
   app.get('/api/settings/email', async (c) => {
@@ -152,20 +172,25 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     const settingsEntity = new SettingsEntity(c.env, 'app-settings');
     const settings = await settingsEntity.getState();
     if (!settings.recipient) return bad(c, 'Recipient email not configured.');
-    const [{ items: allMessages }, { items: allReplies }] = await Promise.all([MessageEntity.list(c.env), ReplyEntity.list(c.env)]);
+    const [{ items: allMessages }, { items: allReplies }, { items: allLikes }] = await Promise.all([
+      MessageEntity.list(c.env), 
+      ReplyEntity.list(c.env),
+      LikeEntity.list(c.env)
+    ]);
     const newMessages = allMessages.filter(m => m.ts > settings.lastSentTs);
     const newReplies = allReplies.filter(r => r.ts > settings.lastSentTs);
-    const totalLikes = newMessages.reduce((sum, msg) => sum + (msg.likes || 0), 0) + newReplies.reduce((sum, r) => sum + (r.likes || 0), 0);
+    const newLikesCount = allLikes.filter(l => l.ts > settings.lastSentTs).length;
     if (newMessages.length === 0 && newReplies.length === 0) {
       return ok(c, { status: 'No new messages or replies to send.', sentCount: 0 });
     }
     const now = Date.now();
     let status: 'success' | 'failure' = 'success';
-    let responseSnippet = `Mock send: ${newMessages.length} messages, ${newReplies.length} replies.`;
-    // ... (HTTP sending logic remains the same, but can be enhanced with reply/like counts)
+    let responseSnippet = `Mock send: ${newMessages.length} messages, ${newReplies.length} replies, ${newLikesCount} new likes.`;
+    // In a real scenario, you would build an HTML email and send it via an HTTP provider.
+    // For this demo, we just log it.
     await settingsEntity.mutate(s => {
       if (status === 'success') s.lastSentTs = now;
-      s.sendLogs.unshift({ ts: now, messageCount: newMessages.length, replyCount: newReplies.length, likeCount: totalLikes, status, responseSnippet });
+      s.sendLogs.unshift({ ts: now, messageCount: newMessages.length, replyCount: newReplies.length, likeCount: newLikesCount, status, responseSnippet });
       s.sendLogs = s.sendLogs.slice(0, 10);
       return s;
     });
