@@ -20,6 +20,7 @@ export class SettingsEntity extends Entity<Settings> {
     provider: "mock",
     apiUrl: "",
     apiKey: "",
+    timezone: "UTC",
     lastSentTs: 0,
     sendLogs: [],
   };
@@ -30,10 +31,11 @@ export interface AuthState {
   id: 'auth-singleton';
   otps: OtpStore;
   sessions: SessionStore;
+  rateLimits?: { [phone: string]: number }; // timestamp of last request
 }
 export class AuthEntity extends Entity<AuthState> {
   static readonly entityName = "auth";
-  static readonly initialState: AuthState = { id: 'auth-singleton', otps: {}, sessions: {} };
+  static readonly initialState: AuthState = { id: 'auth-singleton', otps: {}, sessions: {}, rateLimits: {} };
   async saveOtp(phone: string, code: string, expiresAt: number): Promise<void> {
     await this.mutate(s => {
       s.otps[phone] = { code, expiresAt };
@@ -64,6 +66,17 @@ export class AuthEntity extends Entity<AuthState> {
   async verifySession(token: string): Promise<{ userId: string; phone: string } | null> {
     const s = await this.getState();
     return s.sessions[token] ?? null;
+  }
+  async getRateLimit(phone: string): Promise<number> {
+    const s = await this.getState();
+    return s.rateLimits?.[phone] ?? 0;
+  }
+  async updateRateLimit(phone: string, now: number): Promise<void> {
+    await this.mutate(s => {
+      if (!s.rateLimits) s.rateLimits = {};
+      s.rateLimits[phone] = now;
+      return s;
+    });
   }
 }
 // --- Original Template Entities ---

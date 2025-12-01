@@ -11,9 +11,14 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     const { phone } = await c.req.json<{ phone: string }>();
     if (!/^\d{11}$/.test(phone)) return bad(c, 'Invalid phone number format.');
     const auth = new AuthEntity(c.env, 'auth-singleton');
+    const lastRequest = await auth.getRateLimit(phone);
+    if (Date.now() - lastRequest < 60000) {
+      return bad(c, 'Too many requests. Please wait 60 seconds.');
+    }
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
     await auth.saveOtp(phone, code, expiresAt);
+    await auth.updateRateLimit(phone, Date.now());
     // In a real app, you'd send this code via SMS. For demo, we return it.
     return ok(c, { demoCode: code });
   });
@@ -81,27 +86,57 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     let status = 'success';
     let responseSnippet = `Mock send: ${newMessages.length} messages.`;
     if (settings.provider === 'http') {
-      // In a real app, build a proper HTML/text body
-      const emailBody = `You have ${newMessages.length} new message(s):\n\n` +
+      const plainTextBody = `You have ${newMessages.length} new message(s):\n\n` +
         newMessages.map(m => `${m.phoneMasked} at ${new Date(m.ts).toLocaleString()}:\n${m.text}`).join('\n\n---\n\n');
-      try {
-        const resp = await fetch(settings.apiUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${settings.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            to: settings.recipient,
-            subject: `New Messages from ��声 - ${new Date().toLocaleDateString()}`,
-            text: emailBody,
-          }),
-        });
-        if (!resp.ok) throw new Error(`API returned ${resp.status}`);
-        responseSnippet = `HTTP send success: ${resp.status}`;
-      } catch (e) {
-        status = 'failure';
-        responseSnippet = `HTTP send failed: ${e.message}`;
+      const htmlBody = `
+        <html>
+          <body style="font-family: sans-serif; line-height: 1.6;">
+            <h1 style="color: #333;">Daily Messages Summary</h1>
+            <p>You have ${newMessages.length} new message(s) since the last summary.</p>
+            <hr>
+            ${newMessages.map(m => `
+              <div style="margin-bottom: 1.5em; padding: 1em; border-left: 3px solid #F38020; background-color: #f9f9f9;">
+                <p style="margin: 0; color: #555;">
+                  <strong>${m.phoneMasked}</strong> - 
+                  <span style="font-size: 0.9em; color: #777;">${new Date(m.ts).toLocaleString()}</span>
+                </p>
+                <p style="margin-top: 0.5em; color: #333;">${m.text}</p>
+              </div>
+            `).join('')}
+          </body>
+        </html>`;
+      let attempts = 0;
+      let success = false;
+      while (attempts < 2 && !success) {
+        try {
+          const resp = await fetch(settings.apiUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${settings.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              to: settings.recipient,
+              subject: `New Messages from 留声 - ${new Date().toLocaleDateString()}`,
+              text: plainTextBody,
+              html: htmlBody,
+            }),
+          });
+          if (resp.ok) {
+            responseSnippet = `HTTP send success: ${resp.status}`;
+            success = true;
+          } else {
+            throw new Error(`API returned ${resp.status}`);
+          }
+        } catch (e: unknown) {
+          const errMsg = (e as Error)?.message ?? 'Unknown error';
+          status = 'failure';
+          responseSnippet = `HTTP send failed (attempt ${attempts + 1}): ${errMsg}`;
+          if (attempts < 1) {
+            await new Promise(r => setTimeout(r, 1000)); // wait 1s before retry
+          }
+        }
+        attempts++;
       }
     }
     await settingsEntity.mutate(s => {
